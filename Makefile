@@ -1,9 +1,9 @@
 PREFIX=/go
 CMD=crc-driver-libvirt
-GO_VERSION=1.11.6
+GO_VERSION=1.13.4
 DESCRIBE=$(shell git describe --tags)
 
-TARGETS=$(addprefix $(CMD)-, centos7 ubuntu16.04)
+TARGETS=$(addprefix $(CMD)-, centos8 ubuntu20.04)
 
 build: $(TARGETS)
 
