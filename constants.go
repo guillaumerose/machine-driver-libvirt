@@ -57,6 +57,9 @@ const (
     <rng model='virtio'>
       <backend model='random'>/dev/urandom</backend>
     </rng>
+    <vsock model='virtio'>
+      <cid auto='yes'/>
+    </vsock>
   </devices>
 </domain>`
 )
