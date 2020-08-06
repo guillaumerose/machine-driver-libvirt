@@ -2,7 +2,7 @@ package libvirt
 
 const (
 	DriverName    = "libvirt"
-	DriverVersion = "0.12.7"
+	DriverVersion = "0.12.8"
 
 	connectionString = "qemu:///system"
 	dnsmasqLeases    = "/var/lib/libvirt/dnsmasq/%s.leases"
@@ -60,4 +60,3 @@ const (
   </devices>
 </domain>`
 )
-
