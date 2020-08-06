@@ -11,4 +11,4 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local
 COPY . /go/src/github.com/code-ready/machine-driver-libvirt
 WORKDIR /go/src/github.com/code-ready/machine-driver-libvirt
 
-RUN go build -i -v -o /go/bin/crc-driver-libvirt ./cmd/machine-driver-libvirt
+RUN go build -i -v -ldflags="-s -w" -o /go/bin/crc-driver-libvirt ./cmd/machine-driver-libvirt
