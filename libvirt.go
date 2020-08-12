@@ -235,7 +235,7 @@ func (d *Driver) PreCreateCheck() error {
 }
 
 func (d *Driver) Create() error {
-	b2dutils := mcnutils.NewB2dUtils(d.StorePath, "crc")
+	b2dutils := mcnutils.NewB2dUtils(d.StorePath, d.MachineName)
 	if err := b2dutils.CopyDiskToMachineDir(d.DiskPathURL, d.MachineName); err != nil {
 		return err
 	}
