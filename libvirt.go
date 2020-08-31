@@ -28,10 +28,9 @@ type Driver struct {
 	*libvirtdriver.Driver
 
 	// Libvirt connection and state
-	connectionString string
-	conn             *libvirt.Connect
-	VM               *libvirt.Domain
-	vmLoaded         bool
+	conn     *libvirt.Connect
+	VM       *libvirt.Domain
+	vmLoaded bool
 }
 
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
@@ -170,12 +169,12 @@ func (d *Driver) validateNetwork() error {
 	            <host mac='' name='' ip=''/>
 	        </dhcp>
 	*/
-	type Ip struct {
+	type IP struct {
 		Address string `xml:"address,attr"`
 		Netmask string `xml:"prefix,attr"`
 	}
 	type Network struct {
-		Ip Ip `xml:"ip"`
+		IP IP `xml:"ip"`
 	}
 
 	var nw Network
@@ -184,7 +183,7 @@ func (d *Driver) validateNetwork() error {
 		return err
 	}
 
-	if nw.Ip.Address == "" {
+	if nw.IP.Address == "" {
 		return fmt.Errorf("%s network doesn't have DHCP configured", d.Network)
 	}
 	// Corner case, but might happen...
@@ -245,7 +244,9 @@ func (d *Driver) Create() error {
 		if mode&0001 != 1 {
 			log.Debugf("Setting executable bit set on %s", dir)
 			mode |= 0001
-			os.Chmod(dir, mode)
+			if err := os.Chmod(dir, mode); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -284,7 +285,7 @@ func (d *Driver) Create() error {
 	d.VM = vm
 	d.vmLoaded = true
 	log.Debugf("Adding the file: %s", filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)))
-	os.OpenFile(filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)), os.O_RDONLY|os.O_CREATE, 0666)
+	_, _ = os.OpenFile(filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)), os.O_RDONLY|os.O_CREATE, 0666)
 
 	return d.Start()
 }
@@ -365,7 +366,7 @@ func (d *Driver) Remove() error {
 	// Note: If we switch to qcow disks instead of raw the user
 	//       could take a snapshot.  If you do, then Undefine
 	//       will fail unless we nuke the snapshots first
-	d.VM.Destroy() // Ignore errors
+	_ = d.VM.Destroy() // Ignore errors
 	return d.VM.Undefine()
 }
 
@@ -427,10 +428,9 @@ func (d *Driver) validateVMRef() error {
 		if err != nil {
 			log.Warnf("Failed to fetch machine")
 			return fmt.Errorf("Failed to fetch machine '%s'", d.MachineName)
-		} else {
-			d.VM = vm
-			d.vmLoaded = true
 		}
+		d.VM = vm
+		d.vmLoaded = true
 	}
 	return nil
 }
@@ -494,16 +494,20 @@ func (d *Driver) getIPByMacFromSettings(mac string) (string, error) {
 		log.Warnf("Failed to find network: %s", err)
 		return "", err
 	}
-	bridge_name, err := network.GetBridgeName()
+	bridgeName, err := network.GetBridgeName()
 	if err != nil {
 		log.Warnf("Failed to get network bridge: %s", err)
 		return "", err
 	}
-	statusFile := fmt.Sprintf(dnsmasqStatus, bridge_name)
+	statusFile := fmt.Sprintf(dnsmasqStatus, bridgeName)
 	data, err := ioutil.ReadFile(statusFile)
+	if err != nil {
+		log.Warnf("Failed to read status file: %s", err)
+		return "", err
+	}
 	type Lease struct {
-		Ip_address  string `json:"ip-address"`
-		Mac_address string `json:"mac-address"`
+		IPAddress  string `json:"ip-address"`
+		MacAddress string `json:"mac-address"`
 		// Other unused fields omitted
 	}
 	var s []Lease
@@ -520,10 +524,10 @@ func (d *Driver) getIPByMacFromSettings(mac string) (string, error) {
 	}
 	ipAddr := ""
 	for _, value := range s {
-		if strings.ToLower(value.Mac_address) == strings.ToLower(mac) {
+		if strings.EqualFold(value.MacAddress, mac) {
 			// If there are multiple entries,
 			// the last one is the most current
-			ipAddr = value.Ip_address
+			ipAddr = value.IPAddress
 		}
 	}
 	if ipAddr != "" {

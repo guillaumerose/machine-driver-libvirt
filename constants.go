@@ -5,7 +5,6 @@ const (
 	DriverVersion = "0.12.9"
 
 	connectionString = "qemu:///system"
-	dnsmasqLeases    = "/var/lib/libvirt/dnsmasq/%s.leases"
 	dnsmasqStatus    = "/var/lib/libvirt/dnsmasq/%s.status"
 	DefaultMemory    = 8096
 	DefaultCPUs      = 4
