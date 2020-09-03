@@ -21,7 +21,6 @@ $(CMD)-%: Dockerfile.%
 clean:
 	rm -f ./$(CMD)-*
 
-
 release: build
 	@echo "Paste the following into the release page on github and upload the binaries..."
 	@echo ""
@@ -35,8 +34,12 @@ release: build
 	    echo '```' ; \
 	done
 
+.PHONY: validate
+validate: test lint
+
 test:
 	go test ./...
 
+.PHONY: lint
 lint:
 	golangci-lint run
