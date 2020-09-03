@@ -70,13 +70,14 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 }
 
 type DomainConfig struct {
-	DomainName string
-	Memory     int
-	CPU        int
-	CacheMode  string
-	IOMode     string
-	DiskPath   string
-	Network    string
+	DomainName   string
+	Memory       int
+	CPU          int
+	CacheMode    string
+	IOMode       string
+	DiskPath     string
+	Network      string
+	ExtraDevices []string
 }
 
 func (d *Driver) GetMachineName() string {
@@ -264,6 +265,9 @@ func (d *Driver) Create() error {
 		IOMode:     d.IOMode,
 		DiskPath:   d.DiskPath,
 		Network:    d.Network,
+	}
+	if d.VSock {
+		config.ExtraDevices = append(config.ExtraDevices, VSockDevice)
 	}
 
 	var xml bytes.Buffer
