@@ -35,3 +35,5 @@ release: build
 	    echo '```' ; \
 	done
 
+lint:
+	golangci-lint run
