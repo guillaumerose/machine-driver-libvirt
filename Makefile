@@ -37,6 +37,7 @@ release: build
 .PHONY: validate
 validate: test lint
 
+.PHONY: test
 test:
 	go test ./...
 
