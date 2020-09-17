@@ -1,28 +1,33 @@
 package libvirt
 
 import (
-	"bytes"
 	"testing"
-	"text/template"
 
+	"github.com/code-ready/machine/drivers/libvirt"
+	"github.com/code-ready/machine/libmachine/drivers"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTemplating(t *testing.T) {
-	tmpl, err := template.New("domain").Parse(DomainTemplate)
+	xml, err := domainXML(&Driver{
+		Driver: &libvirt.Driver{
+			VMDriver: &drivers.VMDriver{
+				BaseDriver: &drivers.BaseDriver{
+					MachineName: "domain",
+				},
+				DiskPathURL: "disk_path",
+				Memory:      4096,
+				CPU:         4,
+			},
+			Network:   "network",
+			CacheMode: "default",
+			IOMode:    "threads",
+			DiskPath:  "disk_path",
+			VSock:     false,
+		},
+	})
+
 	assert.NoError(t, err)
-
-	var xml bytes.Buffer
-	assert.NoError(t, tmpl.Execute(&xml, DomainConfig{
-		DomainName: "domain",
-		Memory:     4096,
-		CPU:        4,
-		CacheMode:  "default",
-		IOMode:     "threads",
-		DiskPath:   "disk_path",
-		Network:    "network",
-	}))
-
 	assert.Equal(t, `<domain type='kvm'>
   <name>domain</name>
   <memory unit='MB'>4096</memory>
@@ -54,11 +59,6 @@ func TestTemplating(t *testing.T) {
     <graphics type='vnc' autoport='yes' listen='127.0.0.1'>
       <listen type='address' address='127.0.0.1'/>
     </graphics>
-    <interface type='network'>
-      <mac address='52:fd:fc:07:21:82'/>
-      <source network='network'/>
-      <model type='virtio'/>
-    </interface>
     <console type='pty'></console>
     <channel type='pty'>
       <target type='virtio' name='org.qemu.guest_agent.0'/>
@@ -66,25 +66,59 @@ func TestTemplating(t *testing.T) {
     <rng model='virtio'>
       <backend model='random'>/dev/urandom</backend>
     </rng>
+    <interface type='network'>
+      <mac address='52:fd:fc:07:21:82'/>
+      <source network='network'/>
+      <model type='virtio'/>
+    </interface>
   </devices>
-</domain>`, xml.String())
+</domain>`, xml)
 }
 
 func TestVSockTemplating(t *testing.T) {
-	tmpl, err := template.New("domain").Parse(DomainTemplate)
+	xml, err := domainXML(&Driver{
+		Driver: &libvirt.Driver{
+			VMDriver: &drivers.VMDriver{
+				BaseDriver: &drivers.BaseDriver{
+					MachineName: "domain",
+				},
+				DiskPathURL: "disk_path",
+				Memory:      4096,
+				CPU:         4,
+			},
+			Network:   "crc",
+			CacheMode: "default",
+			IOMode:    "threads",
+			DiskPath:  "disk_path",
+			VSock:     true,
+		},
+	})
 	assert.NoError(t, err)
+	assert.Regexp(t, `(?s)<devices>(.*?)<vsock model='virtio'><cid auto='yes'/></vsock>(.*?)</devices>`, xml)
+}
 
-	var xml bytes.Buffer
-	config := DomainConfig{
-		DomainName:   "domain",
-		Memory:       4096,
-		CPU:          4,
-		CacheMode:    "default",
-		IOMode:       "threads",
-		DiskPath:     "disk_path",
-		Network:      "network",
-		ExtraDevices: []string{VSockDevice},
-	}
-	assert.NoError(t, tmpl.Execute(&xml, config))
-	assert.Regexp(t, `(?s)<devices>(.*?)<vsock model='virtio'><cid auto='yes'/></vsock>(.*?)</devices>`, xml.String())
+func TestNetworkTemplating(t *testing.T) {
+	xml, err := domainXML(&Driver{
+		Driver: &libvirt.Driver{
+			VMDriver: &drivers.VMDriver{
+				BaseDriver: &drivers.BaseDriver{
+					MachineName: "domain",
+				},
+				DiskPathURL: "disk_path",
+				Memory:      4096,
+				CPU:         4,
+			},
+			Network:   "crc",
+			CacheMode: "default",
+			IOMode:    "threads",
+			DiskPath:  "disk_path",
+			VSock:     true,
+		},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, xml, `<interface type='network'>
+      <mac address='52:fd:fc:07:21:82'/>
+      <source network='crc'/>
+      <model type='virtio'/>
+    </interface>`)
 }

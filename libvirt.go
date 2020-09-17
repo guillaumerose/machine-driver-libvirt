@@ -79,7 +79,6 @@ type DomainConfig struct {
 	CacheMode    string
 	IOMode       string
 	DiskPath     string
-	Network      string
 	ExtraDevices []string
 }
 
@@ -152,6 +151,9 @@ func (d *Driver) getConn() (*libvirt.Connect, error) {
 
 // Create, or verify the private network is properly configured
 func (d *Driver) validateNetwork() error {
+	if d.Network == "" {
+		return nil
+	}
 	log.Debug("Validating network")
 	conn, err := d.getConn()
 	if err != nil {
@@ -258,26 +260,7 @@ func (d *Driver) Create() error {
 	}
 
 	log.Debugf("Defining VM...")
-	tmpl, err := template.New("domain").Parse(DomainTemplate)
-	if err != nil {
-		return err
-	}
-
-	config := DomainConfig{
-		DomainName: d.MachineName,
-		Memory:     d.Memory,
-		CPU:        d.CPU,
-		CacheMode:  d.CacheMode,
-		IOMode:     d.IOMode,
-		DiskPath:   d.DiskPath,
-		Network:    d.Network,
-	}
-	if d.VSock {
-		config.ExtraDevices = append(config.ExtraDevices, VSockDevice)
-	}
-
-	var xml bytes.Buffer
-	err = tmpl.Execute(&xml, config)
+	xml, err := domainXML(d)
 	if err != nil {
 		return err
 	}
@@ -287,7 +270,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	vm, err := conn.DomainDefineXML(xml.String())
+	vm, err := conn.DomainDefineXML(xml)
 	if err != nil {
 		log.Warnf("Failed to create the VM: %s", err)
 		return err
@@ -298,6 +281,35 @@ func (d *Driver) Create() error {
 	_, _ = os.OpenFile(filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)), os.O_RDONLY|os.O_CREATE, 0666)
 
 	return d.Start()
+}
+
+func domainXML(d *Driver) (string, error) {
+	tmpl, err := template.New("domain").Parse(DomainTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	config := DomainConfig{
+		DomainName: d.MachineName,
+		Memory:     d.Memory,
+		CPU:        d.CPU,
+		CacheMode:  d.CacheMode,
+		IOMode:     d.IOMode,
+		DiskPath:   d.DiskPath,
+	}
+	if d.Network != "" {
+		config.ExtraDevices = append(config.ExtraDevices, NetworkDevice(d.Network))
+	}
+	if d.VSock {
+		config.ExtraDevices = append(config.ExtraDevices, VSockDevice)
+	}
+
+	var xml bytes.Buffer
+	err = tmpl.Execute(&xml, config)
+	if err != nil {
+		return "", err
+	}
+	return xml.String(), nil
 }
 
 func createImage(src, dst string) error {
@@ -326,6 +338,10 @@ func (d *Driver) Start() error {
 	if err := d.VM.Create(); err != nil {
 		log.Warnf("Failed to start: %s", err)
 		return err
+	}
+
+	if d.Network == "" {
+		return nil
 	}
 
 	// They wont start immediately
