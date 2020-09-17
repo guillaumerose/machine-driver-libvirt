@@ -1,5 +1,7 @@
 package libvirt
 
+import "fmt"
+
 const (
 	DriverName    = "libvirt"
 	DriverVersion = "0.12.9"
@@ -44,11 +46,6 @@ const (
     <graphics type='vnc' autoport='yes' listen='127.0.0.1'>
       <listen type='address' address='127.0.0.1'/>
     </graphics>
-    <interface type='network'>
-      <mac address='52:fd:fc:07:21:82'/>
-      <source network='{{.Network}}'/>
-      <model type='virtio'/>
-    </interface>
     <console type='pty'></console>
     <channel type='pty'>
       <target type='virtio' name='org.qemu.guest_agent.0'/>
@@ -57,9 +54,17 @@ const (
       <backend model='random'>/dev/urandom</backend>
     </rng>
 {{- range .ExtraDevices }}
-	{{ . }}
+    {{ . }}
 {{- end }}
   </devices>
 </domain>`
 	VSockDevice = `<vsock model='virtio'><cid auto='yes'/></vsock>`
 )
+
+func NetworkDevice(networkName string) string {
+	return fmt.Sprintf(`<interface type='network'>
+      <mac address='52:fd:fc:07:21:82'/>
+      <source network='%s'/>
+      <model type='virtio'/>
+    </interface>`, networkName)
+}
