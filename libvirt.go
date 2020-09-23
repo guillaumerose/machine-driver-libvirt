@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -23,6 +24,8 @@ import (
 	"github.com/code-ready/machine/libmachine/mcnutils"
 	"github.com/code-ready/machine/libmachine/state"
 )
+
+const filePrefix = "file://"
 
 type Driver struct {
 	*libvirtdriver.Driver
@@ -224,8 +227,11 @@ func (d *Driver) PreCreateCheck() error {
 }
 
 func (d *Driver) Create() error {
-	b2dutils := mcnutils.NewB2dUtils(d.StorePath, d.MachineName)
-	if err := b2dutils.CopyDiskToMachineDir(d.DiskPathURL, d.MachineName); err != nil {
+	if !strings.HasPrefix(d.DiskPathURL, filePrefix) {
+		return fmt.Errorf("DiskPathURL must start with %s", filePrefix)
+	}
+
+	if err := createImage(strings.ReplaceAll(d.DiskPathURL, filePrefix, ""), d.DiskPath); err != nil {
 		return err
 	}
 
@@ -292,6 +298,24 @@ func (d *Driver) Create() error {
 	_, _ = os.OpenFile(filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)), os.O_RDONLY|os.O_CREATE, 0666)
 
 	return d.Start()
+}
+
+func createImage(src, dst string) error {
+	start := time.Now()
+	defer func() {
+		log.Debugf("image creation took %s", time.Since(start).String())
+	}()
+	// #nosec G204
+	cmd := exec.Command("qemu-img",
+		"create",
+		"-f", "qcow2",
+		"-o", fmt.Sprintf("backing_file=%s", src),
+		dst)
+	if err := cmd.Run(); err != nil {
+		log.Debugf("qemu-img create failed, falling back to copy: %v", err)
+		return mcnutils.CopyFile(src, dst)
+	}
+	return nil
 }
 
 func (d *Driver) Start() error {
