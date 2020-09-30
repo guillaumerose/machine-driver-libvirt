@@ -46,7 +46,9 @@ const (
     <graphics type='vnc' autoport='yes' listen='127.0.0.1'>
       <listen type='address' address='127.0.0.1'/>
     </graphics>
-    <console type='pty'></console>
+    <console type='pty'>
+      <log file="{{ .SerialPath }}" append="on"/>
+    </console>
     <channel type='pty'>
       <target type='virtio' name='org.qemu.guest_agent.0'/>
     </channel>

@@ -77,6 +77,7 @@ type DomainConfig struct {
 	CacheMode    string
 	IOMode       string
 	DiskPath     string
+	SerialPath   string
 	ExtraDevices []string
 }
 
@@ -373,6 +374,7 @@ func domainXML(d *Driver) (string, error) {
 		CacheMode:  d.CacheMode,
 		IOMode:     d.IOMode,
 		DiskPath:   d.getDiskPath(),
+		SerialPath: fmt.Sprintf("/var/log/libvirt/qemu/%s-serial.log", d.MachineName),
 	}
 	if d.Network != "" {
 		config.ExtraDevices = append(config.ExtraDevices, NetworkDevice(d.Network))
