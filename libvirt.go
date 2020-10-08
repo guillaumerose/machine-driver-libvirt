@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/libvirt/libvirt-go"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 
 	// Machine-drivers
 	libvirtdriver "github.com/code-ready/machine/drivers/libvirt"
@@ -310,7 +311,7 @@ func (d *Driver) Create() error {
 	if d.ImageFormat != "qcow2" {
 		return fmt.Errorf("Unsupported VM image format: %s", d.ImageFormat)
 	}
-	if err := createImage(d.ImageSourcePath, d.getDiskPath()); err != nil {
+	if err := d.createImage(d.ImageSourcePath, d.getDiskPath()); err != nil {
 		return err
 	}
 
@@ -389,11 +390,21 @@ func domainXML(d *Driver) (string, error) {
 	return xml.String(), nil
 }
 
-func createImage(src, dst string) error {
+func (d *Driver) createImage(src, dst string) error {
 	start := time.Now()
 	defer func() {
 		log.Debugf("image creation took %s", time.Since(start).String())
 	}()
+
+	useFullCopy, err := d.useApparmor()
+	if err != nil {
+		return err
+	}
+	if useFullCopy {
+		log.Debug("Found a secmodel named apparmor, creating a full copy of the image...")
+		return mcnutils.CopyFile(src, dst)
+	}
+
 	// #nosec G204
 	cmd := exec.Command("qemu-img",
 		"create",
@@ -405,6 +416,27 @@ func createImage(src, dst string) error {
 		return mcnutils.CopyFile(src, dst)
 	}
 	return nil
+}
+
+func (d *Driver) useApparmor() (bool, error) {
+	conn, err := d.getConn()
+	if err != nil {
+		return false, err
+	}
+	rawCapabilities, err := conn.GetCapabilities()
+	if err != nil {
+		return false, err
+	}
+	var caps libvirtxml.Caps
+	if err := caps.Unmarshal(rawCapabilities); err != nil {
+		return false, err
+	}
+	for _, model := range caps.Host.SecModel {
+		if model.Name == "apparmor" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (d *Driver) Start() error {
