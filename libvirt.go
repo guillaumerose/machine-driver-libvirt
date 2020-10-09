@@ -6,32 +6,25 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
-	"github.com/libvirt/libvirt-go"
-
-	// Machine-drivers
 	libvirtdriver "github.com/code-ready/machine/drivers/libvirt"
 	"github.com/code-ready/machine/libmachine/drivers"
 	"github.com/code-ready/machine/libmachine/log"
 	"github.com/code-ready/machine/libmachine/mcnflag"
 	"github.com/code-ready/machine/libmachine/mcnutils"
 	"github.com/code-ready/machine/libmachine/state"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
 type Driver struct {
 	*libvirtdriver.Driver
-
-	// Libvirt connection and state
-	conn     *libvirt.Connect
-	vm       *libvirt.Domain
-	vmLoaded bool
 }
 
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
@@ -136,41 +129,26 @@ func convertMBToKiB(sizeMb int) uint64 {
 
 func (d *Driver) setMemory(memorySize int) error {
 	log.Debugf("Setting memory to %d MB", memorySize)
-	if err := d.validateVMRef(); err != nil {
-		return err
-	}
 	/* d.Memory is in MB, SetMemoryFlags expects kiB */
-	err := d.vm.SetMemoryFlags(convertMBToKiB(memorySize), libvirt.DOMAIN_MEM_MAXIMUM)
-	if err != nil {
+	if _, err := execute(virsh("setmaxmem", "--config", d.MachineName, fmt.Sprintf("%v", convertMBToKiB(memorySize))), nil); err != nil {
 		return err
 	}
-	err = d.vm.SetMemoryFlags(convertMBToKiB(memorySize), libvirt.DOMAIN_MEM_CONFIG)
-	if err != nil {
+	if _, err := execute(virsh("setmem", "--config", d.MachineName, fmt.Sprintf("%v", convertMBToKiB(memorySize))), nil); err != nil {
 		return err
 	}
-
 	d.Memory = memorySize
-
 	return nil
 }
 
 func (d *Driver) setVcpus(cpus uint) error {
 	log.Debugf("Setting vcpus to %d", cpus)
-	if err := d.validateVMRef(); err != nil {
+	if _, err := execute(virsh("setvcpus", "--maximum", "--config", d.MachineName, strconv.Itoa(int(cpus))), nil); err != nil {
 		return err
 	}
-
-	err := d.vm.SetVcpusFlags(cpus, libvirt.DOMAIN_VCPU_CONFIG|libvirt.DOMAIN_VCPU_MAXIMUM)
-	if err != nil {
+	if _, err := execute(virsh("setvcpus", "--config", d.MachineName, strconv.Itoa(int(cpus))), nil); err != nil {
 		return err
 	}
-	err = d.vm.SetVcpusFlags(cpus, libvirt.DOMAIN_VCPU_CONFIG)
-	if err != nil {
-		return err
-	}
-
 	d.CPU = int(cpus)
-
 	return nil
 }
 
@@ -209,69 +187,39 @@ func (d *Driver) GetURL() (string, error) {
 	return "", nil
 }
 
-func (d *Driver) getConn() (*libvirt.Connect, error) {
-	if d.conn == nil {
-		conn, err := libvirt.NewConnect(connectionString)
-		if err != nil {
-			log.Errorf("Failed to connect to libvirt: %s", err)
-			return &libvirt.Connect{}, errors.New("Unable to connect to kvm driver, did you add yourself to the libvirtd group?")
-		}
-		d.conn = conn
-	}
-	return d.conn, nil
-}
-
 // Create, or verify the private network is properly configured
 func (d *Driver) validateNetwork() error {
 	if d.Network == "" {
 		return nil
 	}
 	log.Debug("Validating network")
-	conn, err := d.getConn()
+	xmldoc, err := execute(virsh("net-dumpxml", d.Network), nil)
 	if err != nil {
 		return err
 	}
-	network, err := conn.LookupNetworkByName(d.Network)
-	if err != nil {
-		return fmt.Errorf("Use 'crc setup' to define the network, %+v", err)
-	}
-	defer network.Free() // nolint:errcheck
-
-	xmldoc, err := network.GetXMLDesc(0)
-	if err != nil {
-		return err
-	}
-	/* XML structure:
-	<network>
-	    ...
-	    <ip address='a.b.c.d' prefix='24'>
-	        <dhcp>
-	            <host mac='' name='' ip=''/>
-	        </dhcp>
-	*/
-	type IP struct {
-		Address string `xml:"address,attr"`
-		Netmask string `xml:"prefix,attr"`
-	}
-	type Network struct {
-		IP IP `xml:"ip"`
-	}
-
-	var nw Network
-	err = xml.Unmarshal([]byte(xmldoc), &nw)
-	if err != nil {
+	var nw libvirtxml.Network
+	if err := xml.Unmarshal([]byte(xmldoc), &nw); err != nil {
 		return err
 	}
 
-	if nw.IP.Address == "" {
+	if len(nw.IPs) != 1 {
+		return fmt.Errorf("unexpected number of IPs for network %s", d.Network)
+	}
+	if nw.IPs[0].Address == "" {
 		return fmt.Errorf("%s network doesn't have DHCP configured", d.Network)
 	}
 	// Corner case, but might happen...
-	if active, err := network.IsActive(); !active {
-		log.Debugf("Reactivating network: %s", err)
-		err = network.Create()
-		if err != nil {
-			log.Warnf("Failed to Start network: %s", err)
+	out, err := execute(virsh("net-info", d.Network), nil)
+	if err != nil {
+		return err
+	}
+	active, err := regexp.MatchString(`Active:\s*yes`, out)
+	if err != nil {
+		return err
+	}
+	if !active {
+		log.Debugf("Reactivating network")
+		if _, err := execute(virsh("net-start", d.Network), nil); err != nil {
 			return err
 		}
 	}
@@ -279,26 +227,10 @@ func (d *Driver) validateNetwork() error {
 }
 
 func (d *Driver) PreCreateCheck() error {
-	conn, err := d.getConn()
+	err := d.validateNetwork()
 	if err != nil {
 		return err
 	}
-
-	// TODO We could look at conn.GetCapabilities()
-	// parse the XML, and look for kvm
-	log.Debug("About to check libvirt version")
-
-	// TODO might want to check minimum version
-	_, err = conn.GetLibVersion()
-	if err != nil {
-		log.Warnf("Unable to get libvirt version")
-		return err
-	}
-	err = d.validateNetwork()
-	if err != nil {
-		return err
-	}
-	// Others...?
 	return nil
 }
 
@@ -342,51 +274,17 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	conn, err := d.getConn()
-	if err != nil {
-		return err
-	}
+	cmd := virsh("define", "/dev/stdin")
+	cmd.Stdin = bytes.NewReader([]byte(xml))
 
-	vm, err := conn.DomainDefineXML(xml)
-	if err != nil {
+	if _, err := execute(cmd, nil); err != nil {
 		log.Warnf("Failed to create the VM: %s", err)
 		return err
 	}
-	d.vm = vm
-	d.vmLoaded = true
 	log.Debugf("Adding the file: %s", filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)))
 	_, _ = os.OpenFile(filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)), os.O_RDONLY|os.O_CREATE, 0666)
 
 	return d.Start()
-}
-
-func domainXML(d *Driver) (string, error) {
-	tmpl, err := template.New("domain").Parse(DomainTemplate)
-	if err != nil {
-		return "", err
-	}
-
-	config := DomainConfig{
-		DomainName: d.MachineName,
-		Memory:     d.Memory,
-		CPU:        d.CPU,
-		CacheMode:  d.CacheMode,
-		IOMode:     d.IOMode,
-		DiskPath:   d.getDiskPath(),
-	}
-	if d.Network != "" {
-		config.ExtraDevices = append(config.ExtraDevices, NetworkDevice(d.Network))
-	}
-	if d.VSock {
-		config.ExtraDevices = append(config.ExtraDevices, VSockDevice)
-	}
-
-	var xml bytes.Buffer
-	err = tmpl.Execute(&xml, config)
-	if err != nil {
-		return "", err
-	}
-	return xml.String(), nil
 }
 
 func createImage(src, dst string) error {
@@ -409,10 +307,7 @@ func createImage(src, dst string) error {
 
 func (d *Driver) Start() error {
 	log.Debugf("Starting VM %s", d.MachineName)
-	if err := d.validateVMRef(); err != nil {
-		return err
-	}
-	if err := d.vm.Create(); err != nil {
+	if _, err := execute(virsh("start", d.MachineName), nil); err != nil {
 		log.Warnf("Failed to start: %s", err)
 		return err
 	}
@@ -452,16 +347,13 @@ func (d *Driver) Start() error {
 
 func (d *Driver) Stop() error {
 	log.Debugf("Stopping VM %s", d.MachineName)
-	if err := d.validateVMRef(); err != nil {
-		return err
-	}
 	s, err := d.GetState()
 	if err != nil {
 		return err
 	}
 
 	if s != state.Stopped {
-		err := d.vm.Shutdown()
+		_, err := execute(virsh("shutdown", d.MachineName), nil)
 		if err != nil {
 			log.Warnf("Failed to gracefully shutdown VM")
 			return err
@@ -481,14 +373,9 @@ func (d *Driver) Stop() error {
 
 func (d *Driver) Remove() error {
 	log.Debugf("Removing VM %s", d.MachineName)
-	if err := d.validateVMRef(); err != nil {
-		return err
-	}
-	// Note: If we switch to qcow disks instead of raw the user
-	//       could take a snapshot.  If you do, then Undefine
-	//       will fail unless we nuke the snapshots first
-	_ = d.vm.Destroy() // Ignore errors
-	return d.vm.Undefine()
+	_, _ = execute(virsh("destroy", d.MachineName), nil)
+	_, err := execute(virsh("undefine", d.MachineName), nil)
+	return err
 }
 
 func (d *Driver) Restart() error {
@@ -501,161 +388,66 @@ func (d *Driver) Restart() error {
 
 func (d *Driver) Kill() error {
 	log.Debugf("Killing VM %s", d.MachineName)
-	if err := d.validateVMRef(); err != nil {
-		return err
-	}
-	return d.vm.Destroy()
+	_, err := execute(virsh("destroy", d.MachineName), nil)
+	return err
 }
 
 func (d *Driver) GetState() (state.State, error) {
 	log.Debugf("Getting current state...")
-	if err := d.validateVMRef(); err != nil {
-		return state.None, err
-	}
-	virState, _, err := d.vm.GetState()
+	out, err := execute(virsh("domstate", d.MachineName), nil)
 	if err != nil {
 		return state.None, err
 	}
-	switch virState {
-	case libvirt.DOMAIN_NOSTATE:
-		return state.None, nil
-	case libvirt.DOMAIN_RUNNING:
+	switch strings.TrimSpace(string(out)) {
+	case "running":
 		return state.Running, nil
-	case libvirt.DOMAIN_BLOCKED:
-		// TODO - Not really correct, but does it matter?
+	case "idle":
 		return state.Error, nil
-	case libvirt.DOMAIN_PAUSED:
-		return state.Paused, nil
-	case libvirt.DOMAIN_SHUTDOWN:
+	case "in shutdown":
+		return state.Running, nil
+	case "shut off":
 		return state.Stopped, nil
-	case libvirt.DOMAIN_CRASHED:
+	case "crashed":
 		return state.Error, nil
-	case libvirt.DOMAIN_PMSUSPENDED:
-		return state.Saved, nil
-	case libvirt.DOMAIN_SHUTOFF:
-		return state.Stopped, nil
+	case "pmsuspended":
+		return state.Error, nil
 	}
 	return state.None, nil
-}
-
-func (d *Driver) validateVMRef() error {
-	if !d.vmLoaded {
-		log.Debugf("Fetching VM...")
-		conn, err := d.getConn()
-		if err != nil {
-			return err
-		}
-		vm, err := conn.LookupDomainByName(d.MachineName)
-		if err != nil {
-			log.Warnf("Failed to fetch machine")
-			return fmt.Errorf("Failed to fetch machine '%s'", d.MachineName)
-		}
-		d.vm = vm
-		d.vmLoaded = true
-	}
-	return nil
 }
 
 // This implementation is specific to default networking in libvirt
 // with dnsmasq
 func (d *Driver) getMAC() (string, error) {
-	if err := d.validateVMRef(); err != nil {
-		return "", err
-	}
-	xmldoc, err := d.vm.GetXMLDesc(0)
+	out, err := execute(virsh("dumpxml", d.MachineName), nil)
 	if err != nil {
 		return "", err
 	}
-	/* XML structure:
-	<domain>
-	    ...
-	    <devices>
-	        ...
-	        <interface type='network'>
-	            ...
-	            <mac address='52:54:00:d2:3f:ba'/>
-	            ...
-	        </interface>
-	        ...
-	*/
-	type Mac struct {
-		Address string `xml:"address,attr"`
-	}
-	type Source struct {
-		Network string `xml:"network,attr"`
-	}
-	type Interface struct {
-		Type   string `xml:"type,attr"`
-		Mac    Mac    `xml:"mac"`
-		Source Source `xml:"source"`
-	}
-	type Devices struct {
-		Interfaces []Interface `xml:"interface"`
-	}
-	type Domain struct {
-		Devices Devices `xml:"devices"`
-	}
-
-	var dom Domain
-	err = xml.Unmarshal([]byte(xmldoc), &dom)
-	if err != nil {
+	var dom libvirtxml.Domain
+	if err := xml.Unmarshal([]byte(out), &dom); err != nil {
 		return "", err
 	}
-
-	return dom.Devices.Interfaces[0].Mac.Address, nil
+	return dom.Devices.Interfaces[0].MAC.Address, nil
 }
 
 func (d *Driver) getIPByMacFromSettings(mac string) (string, error) {
-	conn, err := d.getConn()
+	xmldoc, err := execute(virsh("net-dumpxml", d.Network), nil)
 	if err != nil {
 		return "", err
 	}
-	network, err := conn.LookupNetworkByName(d.Network)
-	if err != nil {
-		log.Warnf("Failed to find network: %s", err)
+	var nw libvirtxml.Network
+	if err := xml.Unmarshal([]byte(xmldoc), &nw); err != nil {
 		return "", err
 	}
-	defer network.Free() // nolint:errcheck
-	bridgeName, err := network.GetBridgeName()
-	if err != nil {
-		log.Warnf("Failed to get network bridge: %s", err)
-		return "", err
+	if len(nw.IPs) != 1 {
+		return "", fmt.Errorf("unexpected number of IPs for network %s", d.Network)
 	}
-	statusFile := fmt.Sprintf(dnsmasqStatus, bridgeName)
-	data, err := ioutil.ReadFile(statusFile)
-	if err != nil {
-		log.Warnf("Failed to read status file: %s", err)
-		return "", err
-	}
-	type Lease struct {
-		IPAddress  string `json:"ip-address"`
-		MacAddress string `json:"mac-address"`
-		// Other unused fields omitted
-	}
-	var s []Lease
-
-	// In case of status file is empty then don't try to unmarshal data
-	if len(data) == 0 {
-		return "", nil
-	}
-
-	err = json.Unmarshal(data, &s)
-	if err != nil {
-		log.Warnf("Failed to decode dnsmasq lease status: %s", err)
-		return "", err
-	}
-	ipAddr := ""
-	for _, value := range s {
-		if strings.EqualFold(value.MacAddress, mac) {
-			// If there are multiple entries,
-			// the last one is the most current
-			ipAddr = value.IPAddress
+	for _, host := range nw.IPs[0].DHCP.Hosts {
+		if strings.EqualFold(host.MAC, mac) {
+			log.Debugf("IP address: %s", host.IP)
+			return host.IP, nil
 		}
 	}
-	if ipAddr != "" {
-		log.Debugf("IP address: %s", ipAddr)
-	}
-	return ipAddr, nil
+	return "", nil
 }
 
 func (d *Driver) GetIP() (string, error) {
