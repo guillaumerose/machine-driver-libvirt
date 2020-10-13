@@ -2,7 +2,6 @@ package libvirt
 
 import (
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/libvirt/libvirt-go"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 
 	// Machine-drivers
 	libvirtdriver "github.com/code-ready/machine/drivers/libvirt"
@@ -254,29 +254,15 @@ func (d *Driver) validateNetwork() error {
 	if err != nil {
 		return err
 	}
-	/* XML structure:
-	<network>
-	    ...
-	    <ip address='a.b.c.d' prefix='24'>
-	        <dhcp>
-	            <host mac='' name='' ip=''/>
-	        </dhcp>
-	*/
-	type IP struct {
-		Address string `xml:"address,attr"`
-		Netmask string `xml:"prefix,attr"`
-	}
-	type Network struct {
-		IP IP `xml:"ip"`
-	}
-
-	var nw Network
-	err = xml.Unmarshal([]byte(xmldoc), &nw)
-	if err != nil {
+	var nw libvirtxml.Network
+	if err := nw.Unmarshal(xmldoc); err != nil {
 		return err
 	}
 
-	if nw.IP.Address == "" {
+	if len(nw.IPs) != 1 {
+		return fmt.Errorf("unexpected number of IPs for network %s", d.Network)
+	}
+	if nw.IPs[0].Address == "" {
 		return fmt.Errorf("%s network doesn't have DHCP configured", d.Network)
 	}
 	// Corner case, but might happen...
@@ -591,43 +577,16 @@ func (d *Driver) getMAC() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	/* XML structure:
-	<domain>
-	    ...
-	    <devices>
-	        ...
-	        <interface type='network'>
-	            ...
-	            <mac address='52:54:00:d2:3f:ba'/>
-	            ...
-	        </interface>
-	        ...
-	*/
-	type Mac struct {
-		Address string `xml:"address,attr"`
-	}
-	type Source struct {
-		Network string `xml:"network,attr"`
-	}
-	type Interface struct {
-		Type   string `xml:"type,attr"`
-		Mac    Mac    `xml:"mac"`
-		Source Source `xml:"source"`
-	}
-	type Devices struct {
-		Interfaces []Interface `xml:"interface"`
-	}
-	type Domain struct {
-		Devices Devices `xml:"devices"`
-	}
 
-	var dom Domain
-	err = xml.Unmarshal([]byte(xmldoc), &dom)
-	if err != nil {
+	var dom libvirtxml.Domain
+	if err := dom.Unmarshal(xmldoc); err != nil {
 		return "", err
 	}
 
-	return dom.Devices.Interfaces[0].Mac.Address, nil
+	if len(dom.Devices.Interfaces) != 1 {
+		return "", fmt.Errorf("unexpected number of interface for domain %s", dom.Name)
+	}
+	return dom.Devices.Interfaces[0].MAC.Address, nil
 }
 
 func (d *Driver) getIPByMacFromSettings(mac string) (string, error) {
