@@ -1,7 +1,6 @@
 package libvirt
 
 import (
-	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -11,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/libvirt/libvirt-go"
@@ -398,35 +396,6 @@ func (d *Driver) Create() error {
 	_, _ = os.OpenFile(filepath.Join(d.ResolveStorePath("."), fmt.Sprintf(".%s-exist", d.MachineName)), os.O_RDONLY|os.O_CREATE, 0666)
 
 	return d.Start()
-}
-
-func domainXML(d *Driver) (string, error) {
-	tmpl, err := template.New("domain").Parse(DomainTemplate)
-	if err != nil {
-		return "", err
-	}
-
-	config := DomainConfig{
-		DomainName: d.MachineName,
-		Memory:     d.Memory,
-		CPU:        d.CPU,
-		CacheMode:  d.CacheMode,
-		IOMode:     d.IOMode,
-		DiskPath:   d.getDiskImagePath(),
-	}
-	if d.Network != "" {
-		config.ExtraDevices = append(config.ExtraDevices, NetworkDevice(d.Network))
-	}
-	if d.VSock {
-		config.ExtraDevices = append(config.ExtraDevices, VSockDevice)
-	}
-
-	var xml bytes.Buffer
-	err = tmpl.Execute(&xml, config)
-	if err != nil {
-		return "", err
-	}
-	return xml.String(), nil
 }
 
 func createImage(src, dst string) error {
