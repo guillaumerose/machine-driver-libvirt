@@ -28,49 +28,45 @@ func TestTemplating(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	assert.Equal(t, `<domain type='kvm'>
+	assert.Equal(t, `<domain type="kvm">
   <name>domain</name>
-  <memory unit='MB'>4096</memory>
-  <vcpu placement='static'>4</vcpu>
-  <features><acpi/><apic/><pae/></features>
-  <cpu mode='host-passthrough'>
-    <feature policy="disable" name="rdrand"/>
-  </cpu>
+  <memory unit="MB">4096</memory>
+  <vcpu placement="static">4</vcpu>
   <os>
-    <type arch='x86_64'>hvm</type>
-    <boot dev='hd'/>
-    <bootmenu enable='no'/>
+    <type arch="x86_64">hvm</type>
+    <boot dev="hd"></boot>
+    <bootmenu enable="no"></bootmenu>
   </os>
   <features>
-    <acpi/>
-    <apic/>
-    <pae/>
+    <pae></pae>
+    <acpi></acpi>
+    <apic></apic>
   </features>
-  <clock offset='utc'/>
-  <on_poweroff>destroy</on_poweroff>
-  <on_reboot>restart</on_reboot>
-  <on_crash>destroy</on_crash>
+  <cpu mode="host-passthrough">
+    <feature policy="disable" name="rdrand"></feature>
+  </cpu>
+  <clock offset="utc"></clock>
   <devices>
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2' cache='default' io='threads' />
-      <source file='machines/domain/domain.test'/>
-      <target dev='vda' bus='virtio'/>
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2" cache="default" io="threads"></driver>
+      <source file="machines/domain/domain.test"></source>
+      <target dev="vda" bus="virtio"></target>
     </disk>
-    <graphics type='vnc' autoport='yes' listen='127.0.0.1'>
-      <listen type='address' address='127.0.0.1'/>
-    </graphics>
-    <console type='pty'></console>
-    <channel type='pty'>
-      <target type='virtio' name='org.qemu.guest_agent.0'/>
-    </channel>
-    <rng model='virtio'>
-      <backend model='random'>/dev/urandom</backend>
-    </rng>
-    <interface type='network'>
-      <mac address='52:fd:fc:07:21:82'/>
-      <source network='network'/>
-      <model type='virtio'/>
+    <interface type="network">
+      <mac address="52:fd:fc:07:21:82"></mac>
+      <source network="network"></source>
+      <model type="virtio"></model>
     </interface>
+    <console></console>
+    <channel>
+      <target type="virtio" name="org.qemu.guest_agent.0"></target>
+    </channel>
+    <graphics type="vnc" autoport="yes" listen="127.0.0.1">
+      <listen type="address" address="127.0.0.1"></listen>
+    </graphics>
+    <rng model="virtio">
+      <backend model="random">/dev/urandom</backend>
+    </rng>
   </devices>
 </domain>`, xml)
 }
@@ -94,7 +90,7 @@ func TestVSockTemplating(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-	assert.Regexp(t, `(?s)<devices>(.*?)<vsock model='virtio'><cid auto='yes'/></vsock>(.*?)</devices>`, xml)
+	assert.Regexp(t, `(?s)<devices>(.*?)<vsock model="virtio">\s*<cid auto="yes">\s*</cid>\s*</vsock>(.*?)</devices>`, xml)
 }
 
 func TestNetworkTemplating(t *testing.T) {
@@ -116,9 +112,9 @@ func TestNetworkTemplating(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-	assert.Contains(t, xml, `<interface type='network'>
-      <mac address='52:fd:fc:07:21:82'/>
-      <source network='crc'/>
-      <model type='virtio'/>
+	assert.Contains(t, xml, `<interface type="network">
+      <mac address="52:fd:fc:07:21:82"></mac>
+      <source network="crc"></source>
+      <model type="virtio"></model>
     </interface>`)
 }
