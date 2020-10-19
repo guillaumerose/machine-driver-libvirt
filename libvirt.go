@@ -398,6 +398,7 @@ func createImage(src, dst string) error {
 	cmd := exec.Command("qemu-img",
 		"create",
 		"-f", "qcow2",
+		"-F", "qcow2",
 		"-o", fmt.Sprintf("backing_file=%s", src),
 		dst)
 	if err := cmd.Run(); err != nil {
