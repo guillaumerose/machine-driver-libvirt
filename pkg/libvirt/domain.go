@@ -86,15 +86,6 @@ func domainXML(d *Driver) (string, error) {
 			Consoles: []libvirtxml.DomainConsole{
 				{},
 			},
-			Channels: []libvirtxml.DomainChannel{
-				{
-					Target: &libvirtxml.DomainChannelTarget{
-						VirtIO: &libvirtxml.DomainChannelTargetVirtIO{
-							Name: "org.qemu.guest_agent.0",
-						},
-					},
-				},
-			},
 			RNGs: []libvirtxml.DomainRNG{
 				{
 					Model: "virtio",
