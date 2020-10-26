@@ -58,9 +58,6 @@ func TestTemplating(t *testing.T) {
       <model type="virtio"></model>
     </interface>
     <console></console>
-    <channel>
-      <target type="virtio" name="org.qemu.guest_agent.0"></target>
-    </channel>
     <graphics type="vnc" autoport="yes" listen="127.0.0.1">
       <listen type="address" address="127.0.0.1"></listen>
     </graphics>
