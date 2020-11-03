@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/libvirt/libvirt-go"
@@ -557,81 +555,6 @@ func (d *Driver) validateVMRef() error {
 	return nil
 }
 
-// This implementation is specific to default networking in libvirt
-// with dnsmasq
-func (d *Driver) getMAC() (string, error) {
-	if err := d.validateVMRef(); err != nil {
-		return "", err
-	}
-	xmldoc, err := d.vm.GetXMLDesc(0)
-	if err != nil {
-		return "", err
-	}
-
-	var dom libvirtxml.Domain
-	if err := dom.Unmarshal(xmldoc); err != nil {
-		return "", err
-	}
-
-	if len(dom.Devices.Interfaces) != 1 {
-		return "", fmt.Errorf("unexpected number of interface for domain %s", dom.Name)
-	}
-	return dom.Devices.Interfaces[0].MAC.Address, nil
-}
-
-func (d *Driver) getIPByMacFromSettings(mac string) (string, error) {
-	conn, err := d.getConn()
-	if err != nil {
-		return "", err
-	}
-	network, err := conn.LookupNetworkByName(d.Network)
-	if err != nil {
-		log.Warnf("Failed to find network: %s", err)
-		return "", err
-	}
-	defer network.Free() // nolint:errcheck
-	bridgeName, err := network.GetBridgeName()
-	if err != nil {
-		log.Warnf("Failed to get network bridge: %s", err)
-		return "", err
-	}
-	statusFile := fmt.Sprintf(dnsmasqStatus, bridgeName)
-	data, err := ioutil.ReadFile(statusFile)
-	if err != nil {
-		log.Warnf("Failed to read status file: %s", err)
-		return "", err
-	}
-	type Lease struct {
-		IPAddress  string `json:"ip-address"`
-		MacAddress string `json:"mac-address"`
-		// Other unused fields omitted
-	}
-	var s []Lease
-
-	// In case of status file is empty then don't try to unmarshal data
-	if len(data) == 0 {
-		return "", nil
-	}
-
-	err = json.Unmarshal(data, &s)
-	if err != nil {
-		log.Warnf("Failed to decode dnsmasq lease status: %s", err)
-		return "", err
-	}
-	ipAddr := ""
-	for _, value := range s {
-		if strings.EqualFold(value.MacAddress, mac) {
-			// If there are multiple entries,
-			// the last one is the most current
-			ipAddr = value.IPAddress
-		}
-	}
-	if ipAddr != "" {
-		log.Debugf("IP address: %s", ipAddr)
-	}
-	return ipAddr, nil
-}
-
 func (d *Driver) GetIP() (string, error) {
 	log.Debugf("GetIP called for %s", d.MachineName)
 	s, err := d.GetState()
@@ -641,12 +564,21 @@ func (d *Driver) GetIP() (string, error) {
 	if s != state.Running {
 		return "", errors.New("host is not running")
 	}
-	mac, err := d.getMAC()
+	ifaces, err := d.vm.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE)
 	if err != nil {
 		return "", err
 	}
-
-	return d.getIPByMacFromSettings(mac)
+	for _, iface := range ifaces {
+		if iface.Hwaddr == macAddress {
+			for _, addr := range iface.Addrs {
+				if addr.Type == int(libvirt.IP_ADDR_TYPE_IPV4) { // ipv4
+					log.Debugf("IP address: %s", addr.Addr)
+					return addr.Addr, nil
+				}
+			}
+		}
+	}
+	return "", nil
 }
 
 func NewDriver(hostName, storePath string) drivers.Driver {
