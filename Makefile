@@ -1,3 +1,4 @@
+VERSION ?= dev
 PREFIX=/go
 CMD=crc-driver-libvirt
 DESCRIBE=$(shell git describe --tags)
@@ -8,7 +9,7 @@ TARGETS=$(addprefix $(CMD)-, centos8 ubuntu20.04)
 build: $(TARGETS)
 
 local:
-	go build -i -v -o crc-driver-libvirt-local ./cmd/machine-driver-libvirt
+	go build -v -ldflags="-s -w -X github.com/code-ready/machine-driver-libvirt/pkg/libvirt.DriverVersion=$(VERSION)" -o crc-driver-libvirt-local ./cmd/machine-driver-libvirt
 
 $(CMD)-%: Containerfile.%
 	${CONTAINER_RUNTIME} rmi -f $@ >/dev/null  2>&1 || true
@@ -24,18 +25,8 @@ $(CMD)-%: Containerfile.%
 clean:
 	rm -f ./$(CMD)-*
 
-release: build
-	@echo "Paste the following into the release page on github and upload the binaries..."
-	@echo ""
-	@for bin in $(CMD)-* ; do \
-	    target=$$(echo $${bin} | cut -f5- -d-) ; \
-	    md5=$$(md5sum $${bin}) ; \
-	    echo "* $${target} - md5: $${md5}" ; \
-	    echo '```' ; \
-	    echo "  curl -L https://github.com/dhiltgen/docker-machine-kvm/releases/download/$(DESCRIBE)/$${bin} > /usr/local/bin/$(CMD) \\ " ; \
-	    echo "  chmod +x /usr/local/bin/$(CMD)" ; \
-	    echo '```' ; \
-	done
+release:
+	goreleaser
 
 .PHONY: validate
 validate: test lint
