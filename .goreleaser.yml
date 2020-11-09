@@ -1,0 +1,23 @@
+before:
+  hooks:
+    - make validate
+builds:
+  - goos:
+      - linux
+    goarch:
+      - amd64
+    ldflags:
+      - -s -w -X github.com/code-ready/machine-driver-libvirt/pkg/libvirt.DriverVersion={{.Version}}
+    main: ./cmd/machine-driver-libvirt/main.go
+archives:
+  - format: binary
+    name_template: "crc-driver-libvirt"
+checksum:
+  name_template: 'sha256sum.txt'
+  algorithm: sha256
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

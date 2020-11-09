@@ -1,3 +1,4 @@
 *.sw*
 crc-driver-libvirt-*
 vendor/
+dist/
