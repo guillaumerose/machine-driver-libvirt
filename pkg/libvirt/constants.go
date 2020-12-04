@@ -5,12 +5,6 @@ const (
 	DriverVersion = "0.12.13"
 
 	connectionString = "qemu:///system"
-	DefaultMemory    = 8096
-	DefaultCPUs      = 4
 	DefaultNetwork   = "crc"
 	DefaultPool      = "crc"
-	DefaultCacheMode = "default"
-	DefaultIOMode    = "threads"
-	DefaultSSHUser   = "core"
-	DefaultSSHPort   = 22
 )

@@ -16,7 +16,6 @@ import (
 	libvirtdriver "github.com/code-ready/machine/drivers/libvirt"
 	"github.com/code-ready/machine/libmachine/drivers"
 	"github.com/code-ready/machine/libmachine/log"
-	"github.com/code-ready/machine/libmachine/mcnflag"
 	"github.com/code-ready/machine/libmachine/mcnutils"
 	"github.com/code-ready/machine/libmachine/state"
 )
@@ -30,42 +29,6 @@ type Driver struct {
 	vmLoaded bool
 }
 
-func (d *Driver) GetCreateFlags() []mcnflag.Flag {
-	return []mcnflag.Flag{
-		mcnflag.IntFlag{
-			Name:  "crc-libvirt-memory",
-			Usage: "Size of memory for host in MiB",
-			Value: DefaultMemory,
-		},
-		mcnflag.IntFlag{
-			Name:  "crc-libvirt-cpu-count",
-			Usage: "Number of CPUs",
-			Value: DefaultCPUs,
-		},
-		mcnflag.StringFlag{
-			Name:  "crc-libvirt-network",
-			Usage: "Name of network to connect to",
-			Value: DefaultNetwork,
-		},
-		mcnflag.StringFlag{
-			Name:  "crc-libvirt-cachemode",
-			Usage: "Disk cache mode: default, none, writethrough, writeback, directsync, or unsafe",
-			Value: DefaultCacheMode,
-		},
-		mcnflag.StringFlag{
-			Name:  "crc-libvirt-iomode",
-			Usage: "Disk IO mode: threads, native",
-			Value: DefaultIOMode,
-		},
-		mcnflag.StringFlag{
-			EnvVar: "CRC_LIBVIRT_SSHUSER",
-			Name:   "crc-libvirt-sshuser",
-			Usage:  "SSH username",
-			Value:  DefaultSSHUser,
-		},
-	}
-}
-
 func (d *Driver) GetMachineName() string {
 	return d.MachineName
 }
@@ -74,46 +37,12 @@ func (d *Driver) GetSSHHostname() (string, error) {
 	return d.GetIP()
 }
 
-func (d *Driver) GetSSHKeyPath() string {
-	return d.SSHKeyPath
-}
-
-func (d *Driver) GetSSHPort() (int, error) {
-	if d.SSHPort == 0 {
-		d.SSHPort = DefaultSSHPort
-	}
-
-	return d.SSHPort, nil
-}
-
-func (d *Driver) GetSSHUsername() string {
-	if d.SSHUser == "" {
-		d.SSHUser = DefaultSSHUser
-	}
-
-	return d.SSHUser
-}
-
 func (d *Driver) DriverName() string {
 	return DriverName
 }
 
 func (d *Driver) DriverVersion() string {
 	return DriverVersion
-}
-
-func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
-	log.Debugf("SetConfigFromFlags called")
-	d.Memory = flags.Int("libvirt-memory")
-	d.CPU = flags.Int("libvirt-cpu-count")
-	d.Network = flags.String("libvirt-network")
-	d.CacheMode = flags.String("libvirt-cachemode")
-	d.IOMode = flags.String("libvirt-iomode")
-	d.SSHPort = 22
-
-	// CRC system bundle
-	d.BundleName = flags.String("libvirt-bundlepath")
-	return nil
 }
 
 func convertMiBToKiB(sizeMb int) uint64 {
@@ -184,9 +113,6 @@ func (d *Driver) UpdateConfigRaw(rawConfig []byte) error {
 			log.Warnf("Failed to update CPU count: %v", err)
 			return err
 		}
-	}
-	if newDriver.SSHKeyPath != d.SSHKeyPath {
-		log.Debugf("Updating SSH Key Path", d.SSHKeyPath, newDriver.SSHKeyPath)
 	}
 
 	_, err = d.resizeDiskImageIfNeeded(newDriver.DiskCapacity)
@@ -620,7 +546,6 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 				BaseDriver: &drivers.BaseDriver{
 					MachineName: hostName,
 					StorePath:   storePath,
-					SSHUser:     DefaultSSHUser,
 				},
 			},
 			Network:     DefaultNetwork,

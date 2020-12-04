@@ -1,7 +1,7 @@
 github.com/bugsnag/bugsnag-go v1.5.1/go.mod h1:2oa8nejYd4cQ/b0hMIopN0lCRxU0bueqREvZLWFrtK8=
 github.com/bugsnag/panicwrap v1.2.0/go.mod h1:D/8v3kj0zr8ZAKg1AQ6crr+5VwKN5eIywRkfhyM/+dE=
-github.com/code-ready/machine v0.0.0-20201022100236-4405fef4d0cc h1:9Tp3sGd10JVbS2OhRmsxtsRytRbZoS6akW7DR8hk6Jw=
-github.com/code-ready/machine v0.0.0-20201022100236-4405fef4d0cc/go.mod h1:g30jKsf0FV9yJjsqZFAuFzVxwJE2h5cqDXSuMUV1G/U=
+github.com/code-ready/machine v0.0.0-20201202090222-9558ae8c05b9 h1:fUAQ1rYNefX/QPuU0HL7qxc1bURY3qDq/gca+NxiXt8=
+github.com/code-ready/machine v0.0.0-20201202090222-9558ae8c05b9/go.mod h1:g30jKsf0FV9yJjsqZFAuFzVxwJE2h5cqDXSuMUV1G/U=
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -32,6 +32,7 @@ golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20190529164535-6a60838ec259 h1:so6Hr/LodwSZ5UQDu/7PmQiDeS112WwtLvU3lpSPZTU=
 golang.org/x/sys v0.0.0-20190529164535-6a60838ec259/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c h1:dUUwHk2QECo/6vqA44rthZ8ie2QXMNeKRTHCNY2nXvo=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
