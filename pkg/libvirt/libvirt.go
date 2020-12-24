@@ -16,7 +16,6 @@ import (
 	libvirtdriver "github.com/code-ready/machine/drivers/libvirt"
 	"github.com/code-ready/machine/libmachine/drivers"
 	"github.com/code-ready/machine/libmachine/log"
-	"github.com/code-ready/machine/libmachine/mcnutils"
 	"github.com/code-ready/machine/libmachine/state"
 )
 
@@ -344,7 +343,7 @@ func createImage(src, dst string) error {
 		dst)
 	if err := cmd.Run(); err != nil {
 		log.Debugf("qemu-img create failed, falling back to copy: %v", err)
-		return mcnutils.CopyFile(src, dst)
+		return copyFile(src, dst)
 	}
 	return nil
 }
