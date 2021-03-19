@@ -324,7 +324,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	return d.Start()
+	return nil
 }
 
 func createImage(src, dst string) error {
